@@ -1,0 +1,21 @@
+# Vercel excludes — keep the deployment lean
+.env
+.env.backup
+.env.production
+.git
+.gitignore
+.github
+/node_modules
+/public/storage
+/storage/logs/*
+/storage/framework/cache/data/*
+/storage/framework/sessions/*
+/storage/framework/testing/*
+/storage/framework/views/*
+/tests
+/cooperatrading
+/artisan-container.sh
+.phpunit.cache
+.phpunit.result.cache
+README.md
+.env.example
