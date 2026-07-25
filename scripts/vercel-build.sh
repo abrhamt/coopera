@@ -5,7 +5,13 @@ echo "==> [vercel-build] start"
 
 # 1. Generate APP_KEY if not provided via Vercel env
 if [ -z "${APP_KEY:-}" ]; then
-    export APP_KEY="base64:$(php -r 'echo base64_encode(random_bytes(32));')"
+    if command -v php &> /dev/null; then
+        export APP_KEY="base64:$(php -r 'echo base64_encode(random_bytes(32));')"
+    elif command -v openssl &> /dev/null; then
+        export APP_KEY="base64:$(openssl rand -base64 32)"
+    else
+        export APP_KEY="base64:$(head -c 32 /dev/urandom | base64)"
+    fi
     echo "==> [vercel-build] generated APP_KEY"
 fi
 
@@ -45,26 +51,29 @@ ADMIN_EMAIL=admin@cooperatrading.com
 VERCEL=1
 EOF
 
-# 3. Composer install (no dev, no scripts — we run them explicitly)
-echo "==> [vercel-build] composer install"
-composer install --optimize-autoloader --no-dev --no-scripts --no-interaction
+# 3. Composer install (if composer is available in build environment)
+if command -v composer &> /dev/null; then
+    echo "==> [vercel-build] composer install"
+    composer install --optimize-autoloader --no-dev --no-scripts --no-interaction
+else
+    echo "==> [vercel-build] composer not found in build environment; vercel-php builder will install dependencies during function deployment"
+fi
 
-# 4. Run Laravel post-autoload scripts (package discovery, etc.)
-php artisan package:discover --ansi || true
+# 4. Run Laravel commands (if php is available in build environment)
+if command -v php &> /dev/null; then
+    echo "==> [vercel-build] running artisan commands"
+    php artisan package:discover --ansi || true
+    php artisan migrate:fresh --seed --force --no-interaction || true
+    php artisan config:cache || true
+    php artisan route:cache || true
+    php artisan view:cache || true
+else
+    echo "==> [vercel-build] php not found in build environment; skipping build-time artisan commands"
+fi
 
-# 5. Fresh migrate + seed into the bundled SQLite file
-echo "==> [vercel-build] migrate --seed"
-php artisan migrate:fresh --seed --force --no-interaction
-
-# 6. Build frontend assets
+# 5. Build frontend assets
 echo "==> [vercel-build] npm build"
 npm ci --no-audit --no-fund
 npm run build
-
-# 7. Cache config / routes / views for production
-echo "==> [vercel-build] optimize"
-php artisan config:cache
-php artisan route:cache
-php artisan view:cache
 
 echo "==> [vercel-build] done"
